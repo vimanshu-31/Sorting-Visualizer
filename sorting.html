@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sorting Visualizer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin-top: 1rem;
+      color: #333;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    select, button, input[type="number"], input[type="text"] {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: none;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    input[type="range"] {
+      width: 150px;
+    }
+
+    button {
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #bars-container {
+      display: flex;
+      align-items: flex-end;
+      height: 400px;
+      width: 90%;
+      max-width: 1000px;
+      border: 1px solid #ccc;
+      background: white;
+      margin-top: 2rem;
+      position: relative;
+    }
+
+    .bar {
+      flex: 1;
+      margin: 0 2px;
+      background-color: #3498db;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .bar span {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.75rem;
+      color: #333;
+    }
+
+    .bar.comparing {
+      background-color: #f39c12;
+    }
+
+    .bar.swapping {
+      background-color: #e74c3c;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sorting Visualizer</h1>
+  <div class="controls">
+    <select id="algorithm">
+      <option value="bubble">Bubble Sort</option>
+      <option value="insertion">Insertion Sort</option>
+      <option value="merge">Merge Sort</option>
+      <option value="heap">Heap Sort</option>
+      <option value="quick">Quick Sort</option>
+    </select>
+    <input type="text" id="arrayInput" placeholder="e.g. 5,1,4,2,8" />
+    <button onclick="generateBarsFromInput()">Use Array</button>
+    <button onclick="generateBars()">Generate Random</button>
+    <button onclick="startSorting()">Start Sorting</button>
+    <label>Speed: <input type="range" id="speedRange" min="1" max="1000" value="100"></label>
+  </div>
+  <div id="bars-container"></div>
+
+  <script>
+    let bars = [];
+    let delay = 100;
+
+    document.getElementById("speedRange").addEventListener("input", function () {
+      delay = parseInt(this.value);
+    });
+
+    function generateBars(num = 30) {
+      const container = document.getElementById('bars-container');
+      container.innerHTML = '';
+      bars = [];
+      for (let i = 0; i < num; i++) {
+        const value = Math.floor(Math.random() * 100) + 1;
+        const bar = document.createElement('div');
+        bar.classList.add('bar');
+        bar.style.height = `${value * 3}px`;
+        bar.dataset.value = value;
+        bar.innerHTML = `<span>${value}</span>`;
+        container.appendChild(bar);
+        bars.push(bar);
+      }
+    }
+
+    function generateBarsFromInput() {
+      const input = document.getElementById("arrayInput").value.trim();
+      const arr = input.split(',').map(Number).filter(x => !isNaN(x) && x > 0);
+      if (arr.length === 0) return alert("Enter a valid array!");
+      const container = document.getElementById('bars-container');
+      container.innerHTML = '';
+      bars = [];
+      arr.forEach(value => {
+        const bar = document.createElement('div');
+        bar.classList.add('bar');
+        bar.style.height = `${value * 3}px`;
+        bar.dataset.value = value;
+        bar.innerHTML = `<span>${value}</span>`;
+        container.appendChild(bar);
+        bars.push(bar);
+      });
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function startSorting() {
+      const algo = document.getElementById('algorithm').value;
+      switch (algo) {
+        case 'bubble': await bubbleSort(); break;
+        case 'insertion': await insertionSort(); break;
+        case 'merge': await mergeSortWrapper(); break;
+        case 'heap': await heapSort(); break;
+        case 'quick': await quickSort(0, bars.length - 1); break;
+      }
+    }
+
+    async function bubbleSort() {
+      let len = bars.length;
+      for (let i = 0; i < len; i++) {
+        for (let j = 0; j < len - i - 1; j++) {
+          highlight(j, j + 1);
+          if (+bars[j].dataset.value > +bars[j + 1].dataset.value) {
+            await swap(j, j + 1);
+          }
+          unhighlight(j, j + 1);
+          await sleep(delay);
+        }
+      }
+    }
+
+    async function insertionSort() {
+      for (let i = 1; i < bars.length; i++) {
+        let j = i;
+        while (j > 0 && +bars[j - 1].dataset.value > +bars[j].dataset.value) {
+          highlight(j, j - 1);
+          await swap(j, j - 1);
+          unhighlight(j, j - 1);
+          j--;
+          await sleep(delay);
+        }
+      }
+    }
+
+    async function mergeSortWrapper() {
+      await mergeSort(0, bars.length - 1);
+    }
+
+    async function mergeSort(start, end) {
+      if (start >= end) return;
+      const mid = Math.floor((start + end) / 2);
+      await mergeSort(start, mid);
+      await mergeSort(mid + 1, end);
+      await merge(start, mid, end);
+    }
+
+    async function merge(start, mid, end) {
+      const merged = [];
+      let i = start, j = mid + 1;
+      while (i <= mid && j <= end) {
+        highlight(i, j);
+        await sleep(delay);
+        if (+bars[i].dataset.value <= +bars[j].dataset.value) {
+          merged.push(bars[i++]);
+        } else {
+          merged.push(bars[j++]);
+        }
+        unhighlight(i - 1, j - 1);
+      }
+      while (i <= mid) merged.push(bars[i++]);
+      while (j <= end) merged.push(bars[j++]);
+
+      for (let k = 0; k < merged.length; k++) {
+        bars[start + k].style.height = merged[k].style.height;
+        bars[start + k].dataset.value = merged[k].dataset.value;
+        bars[start + k].innerHTML = `<span>${merged[k].dataset.value}</span>`;
+        await sleep(delay / 2);
+      }
+    }
+
+    async function heapSort() {
+      let n = bars.length;
+      for (let i = Math.floor(n / 2) - 1; i >= 0; i--) await heapify(n, i);
+      for (let i = n - 1; i > 0; i--) {
+        await swap(0, i);
+        await heapify(i, 0);
+      }
+    }
+
+    async function heapify(n, i) {
+      let largest = i;
+      let l = 2 * i + 1;
+      let r = 2 * i + 2;
+
+      if (l < n && +bars[l].dataset.value > +bars[largest].dataset.value) largest = l;
+      if (r < n && +bars[r].dataset.value > +bars[largest].dataset.value) largest = r;
+
+      if (largest != i) {
+        await swap(i, largest);
+        await heapify(n, largest);
+        await sleep(delay);
+      }
+    }
+
+    async function quickSort(low, high) {
+      if (low < high) {
+        const pi = await partition(low, high);
+        await quickSort(low, pi - 1);
+        await quickSort(pi + 1, high);
+      }
+    }
+
+    async function partition(low, high) {
+      const pivot = +bars[high].dataset.value;
+      let i = low - 1;
+
+      for (let j = low; j < high; j++) {
+        highlight(j, high);
+        if (+bars[j].dataset.value < pivot) {
+          i++;
+          await swap(i, j);
+        }
+        unhighlight(j, high);
+        await sleep(delay);
+      }
+      await swap(i + 1, high);
+      return i + 1;
+    }
+
+    function highlight(i, j) {
+      bars[i]?.classList.add('comparing');
+      bars[j]?.classList.add('comparing');
+    }
+
+    function unhighlight(i, j) {
+      bars[i]?.classList.remove('comparing');
+      bars[j]?.classList.remove('comparing');
+    }
+
+    async function swap(i, j) {
+      bars[i].classList.add('swapping');
+      bars[j].classList.add('swapping');
+      await sleep(delay);
+      [bars[i].style.height, bars[j].style.height] = [bars[j].style.height, bars[i].style.height];
+      [bars[i].dataset.value, bars[j].dataset.value] = [bars[j].dataset.value, bars[i].dataset.value];
+      bars[i].innerHTML = `<span>${bars[i].dataset.value}</span>`;
+      bars[j].innerHTML = `<span>${bars[j].dataset.value}</span>`;
+      bars[i].classList.remove('swapping');
+      bars[j].classList.remove('swapping');
+    }
+
+    generateBars();
+  </script>
+</body>
+</html>
